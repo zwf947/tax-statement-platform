@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tax Transaction Review</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        .container {
+            max-width: 1450px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+        }
+
+        .flash {
+            padding: 12px 14px;
+            background: #e8f0fe;
+            border: 1px solid #c7dafc;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        form.inline {
+            display: inline;
+        }
+
+        input[type="file"],
+        input[type="text"],
+        select,
+        button {
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            font-size: 14px;
+        }
+
+        button {
+            background: #111827;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+
+        button:hover {
+            opacity: 0.92;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        .summary-box {
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .summary-box .label {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 6px;
+        }
+
+        .summary-box .value {
+            font-size: 22px;
+            font-weight: bold;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;
+        }
+
+        th, td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #e5e7eb;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        th {
+            background: #f9fafb;
+            font-size: 13px;
+            color: #374151;
+        }
+
+        .needs-review {
+            color: #b45309;
+            font-weight: bold;
+        }
+
+        .reviewed {
+            color: #047857;
+            font-weight: bold;
+        }
+
+        .edit-form {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .edit-form input[name="description"] {
+            min-width: 260px;
+        }
+
+        .edit-form input[name="amount"] {
+            width: 110px;
+        }
+
+        .small-button {
+            padding: 8px 10px;
+            font-size: 13px;
+        }
+
+        .category-pill {
+            display: inline-block;
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: #eef2ff;
+            color: #3730a3;
+            font-size: 13px;
+        }
+
+        .muted {
+            color: #6b7280;
+        }
+
+        .upload-help {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 8px;
+        }
+
+        .top-bar {
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .nowrap {
+            white-space: nowrap;
+        }
+
+        .ajax-message {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #047857;
+            min-height: 18px;
+        }
+
+        .ajax-error {
+            color: #b91c1c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tax Transaction Review Dashboard</h1>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="card">
+                    {% for message in messages %}
+                        <div class="flash">{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <div class="card">
+            <h2>Upload Statements</h2>
+            <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="actions">
+                <input type="file" name="statement_file" accept=".csv,.pdf" multiple required>
+                <button type="submit">Upload & Process</button>
+            </form>
+            <p class="upload-help">You can upload up to 12 bank statements at once. CSV and PDF files are supported.</p>
+        </div>
+
+        <div class="card">
+            <h2>Summary</h2>
+            <div class="summary-grid">
+                <div class="summary-box">
+                    <div class="label">Total Transactions</div>
+                    <div class="value">{{ summary.total_count }}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="label">Total Income</div>
+                    <div class="value">${{ "%.2f"|format(summary.total_income) }}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="label">Total Expenses</div>
+                    <div class="value">${{ "%.2f"|format(summary.total_expense) }}</div>
+                </div>
+                <div class="summary-box">
+                    <div class="label">Needs Review</div>
+                    <div class="value">{{ summary.review_count }}</div>
+                </div>
+            </div>
+
+            <p style="margin-top: 16px;">{{ narrative }}</p>
+            <div id="ajax-message" class="ajax-message"></div>
+        </div>
+
+        <div class="card">
+            <h2>Category Totals</h2>
+            {% if summary.by_category %}
+                <div class="table-wrap">
+                    <table style="min-width: 780px;">
+                        <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Transactions</th>
+                                <th>Total Income</th>
+                                <th>Total Expenses</th>
+                                <th>Net Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in summary.by_category %}
+                            <tr>
+                                <td>{{ item.category }}</td>
+                                <td>{{ item.count }}</td>
+                                <td class="nowrap">${{ "%.2f"|format(item.income_total) }}</td>
+                                <td class="nowrap">${{ "%.2f"|format(item.expense_total) }}</td>
+                                <td class="nowrap">${{ "%.2f"|format(item.net_total) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p class="muted">No category totals yet.</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="top-bar">
+                <h2 style="margin: 0;">Transactions</h2>
+                <div class="actions">
+                    <a href="{{ url_for('export_csv') }}">
+                        <button type="button">Export CSV</button>
+                    </a>
+                    <form action="{{ url_for('reset_data') }}" method="post" class="inline">
+                        <button type="submit" onclick="return confirm('Clear all transaction data?')">Reset All Data</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="table-wrap" style="margin-top: 16px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description / Edit</th>
+                            <th>Amount / Edit</th>
+                            <th>Category / Reassign</th>
+                            <th>Status</th>
+                            <th>Method</th>
+                            <th>Confidence</th>
+                            <th>Source File</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in transactions %}
+                        <tr id="txn-{{ row['id'] }}" data-transaction-id="{{ row['id'] }}">
+                            <td class="date-cell">{{ row["txn_date"] or "" }}</td>
+
+                            {% if row["review_flag"] == 1 %}
+                                <td class="description-cell">
+                                    <form action="{{ url_for('update_transaction', transaction_id=row['id']) }}"
+                                          method="post"
+                                          class="edit-form ajax-update-form"
+                                          data-row-id="{{ row['id'] }}">
+                                        <input
+                                            type="text"
+                                            name="description"
+                                            value="{{ row['raw_description'] }}"
+                                            required
+                                        >
+                                </td>
+                                <td class="amount-cell">
+                                        <input
+                                            type="text"
+                                            name="amount"
+                                            value="{{ row['amount'] }}"
+                                            required
+                                        >
+                                </td>
+                                <td class="category-cell">
+                                        <select name="category" required>
+                                            {% for category in categories %}
+                                                <option value="{{ category }}" {% if category == row["category"] %}selected{% endif %}>
+                                                    {{ category }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                </td>
+                                <td class="status-cell">
+                                        <span class="needs-review">Needs Review</span>
+                                </td>
+                                <td class="method-cell">{{ row["parse_method"] }}</td>
+                                <td class="confidence-cell">{{ row["confidence"] }}</td>
+                                <td class="source-file-cell">{{ row["source_file"] }}</td>
+                                <td class="action-cell">
+                                        <button type="submit" class="small-button save-btn">Save</button>
+                                    </form>
+                                </td>
+                            {% else %}
+                                <td class="description-cell">{{ row["raw_description"] }}</td>
+                                <td class="nowrap amount-cell">${{ "%.2f"|format(row["amount"]) }}</td>
+                                <td class="category-cell"><span class="category-pill">{{ row["category"] }}</span></td>
+                                <td class="status-cell"><span class="reviewed">Reviewed</span></td>
+                                <td class="method-cell">{{ row["parse_method"] }}</td>
+                                <td class="confidence-cell">{{ row["confidence"] }}</td>
+                                <td class="source-file-cell">{{ row["source_file"] }}</td>
+                                <td class="action-cell">
+                                    <form action="{{ url_for('mark_for_review', transaction_id=row['id']) }}"
+                                          method="post"
+                                          class="inline ajax-mark-review-form"
+                                          data-row-id="{{ row['id'] }}">
+                                        <button type="submit" class="small-button">Mark Review</button>
+                                    </form>
+                                </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {% if not transactions %}
+                    <p class="muted" style="margin-top: 16px;">No transactions uploaded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showAjaxMessage(message, isError = false) {
+            const messageBox = document.getElementById("ajax-message");
+            if (!messageBox) return;
+
+            messageBox.textContent = message;
+            if (isError) {
+                messageBox.classList.add("ajax-error");
+            } else {
+                messageBox.classList.remove("ajax-error");
+            }
+
+            window.clearTimeout(showAjaxMessage._timer);
+            showAjaxMessage._timer = window.setTimeout(() => {
+                messageBox.textContent = "";
+                messageBox.classList.remove("ajax-error");
+            }, 2500);
+        }
+
+        function buildEditableRow(row, transactionId, categories) {
+            const currentDescription = row.querySelector(".description-cell").textContent.trim();
+            const currentAmountText = row.querySelector(".amount-cell").textContent.replace("$", "").trim();
+            const currentCategory = row.querySelector(".category-cell").textContent.trim();
+            const parseMethod = row.querySelector(".method-cell").textContent.trim();
+            const confidence = row.querySelector(".confidence-cell").textContent.trim();
+            const sourceFile = row.querySelector(".source-file-cell").textContent.trim();
+
+            const categoryOptions = categories.map(category => {
+                const selected = category === currentCategory ? "selected" : "";
+                return `<option value="${category}" ${selected}>${category}</option>`;
+            }).join("");
+
+            row.querySelector(".description-cell").innerHTML = `
+                <form action="/update_transaction/${transactionId}"
+                      method="post"
+                      class="edit-form ajax-update-form"
+                      data-row-id="${transactionId}">
+                    <input type="text" name="description" value="${currentDescription}" required>
+            `;
+
+            row.querySelector(".amount-cell").innerHTML = `
+                    <input type="text" name="amount" value="${currentAmountText}" required>
+            `;
+
+            row.querySelector(".category-cell").innerHTML = `
+                    <select name="category" required>
+                        ${categoryOptions}
+                    </select>
+            `;
+
+            row.querySelector(".status-cell").innerHTML = `<span class="needs-review">Needs Review</span>`;
+            row.querySelector(".method-cell").textContent = parseMethod;
+            row.querySelector(".confidence-cell").textContent = confidence;
+            row.querySelector(".source-file-cell").textContent = sourceFile;
+
+            row.querySelector(".action-cell").innerHTML = `
+                    <button type="submit" class="small-button save-btn">Save</button>
+                </form>
+            `;
+
+            attachAjaxUpdateHandlers();
+        }
+
+        function buildReviewedRow(row, transactionId, description, amount, category) {
+            row.querySelector(".description-cell").textContent = description;
+            row.querySelector(".amount-cell").textContent = `$${amount.toFixed(2)}`;
+            row.querySelector(".category-cell").innerHTML = `<span class="category-pill">${category}</span>`;
+            row.querySelector(".status-cell").innerHTML = `<span class="reviewed">Reviewed</span>`;
+
+            row.querySelector(".action-cell").innerHTML = `
+                <form action="/mark_for_review/${transactionId}"
+                      method="post"
+                      class="inline ajax-mark-review-form"
+                      data-row-id="${transactionId}">
+                    <button type="submit" class="small-button">Mark Review</button>
+                </form>
+            `;
+
+            attachAjaxMarkReviewHandlers();
+        }
+
+        function attachAjaxUpdateHandlers() {
+            const forms = document.querySelectorAll(".ajax-update-form");
+
+            forms.forEach((form) => {
+                if (form.dataset.bound === "true") return;
+                form.dataset.bound = "true";
+
+                form.addEventListener("submit", async function (e) {
+                    e.preventDefault();
+
+                    const saveButton = form.querySelector(".save-btn");
+                    const row = form.closest("tr");
+                    const formData = new FormData(form);
+                    const transactionId = row.dataset.transactionId;
+
+                    if (saveButton) {
+                        saveButton.disabled = true;
+                        saveButton.textContent = "Saving...";
+                    }
+
+                    try {
+                        const response = await fetch(form.action, {
+                            method: "POST",
+                            body: formData,
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok || !data.success) {
+                            showAjaxMessage(data.message || "Save failed.", true);
+                            if (saveButton) {
+                                saveButton.disabled = false;
+                                saveButton.textContent = "Save";
+                            }
+                            return;
+                        }
+
+                        const description = String(formData.get("description") || "").trim();
+                        const amount = parseFloat(String(formData.get("amount") || "0"));
+                        const category = String(formData.get("category") || "").trim();
+
+                        buildReviewedRow(row, transactionId, description, amount, category);
+                        showAjaxMessage("Transaction updated successfully.");
+
+                    } catch (error) {
+                        showAjaxMessage("Something went wrong while saving.", true);
+                        if (saveButton) {
+                            saveButton.disabled = false;
+                            saveButton.textContent = "Save";
+                        }
+                    }
+                });
+            });
+        }
+
+        function attachAjaxMarkReviewHandlers() {
+            const forms = document.querySelectorAll(".ajax-mark-review-form");
+            const categories = {{ categories|tojson }};
+
+            forms.forEach((form) => {
+                if (form.dataset.bound === "true") return;
+                form.dataset.bound = "true";
+
+                form.addEventListener("submit", async function (e) {
+                    e.preventDefault();
+
+                    const row = form.closest("tr");
+                    const transactionId = row.dataset.transactionId;
+                    const button = form.querySelector("button");
+
+                    if (button) {
+                        button.disabled = true;
+                        button.textContent = "Updating...";
+                    }
+
+                    try {
+                        const response = await fetch(form.action, {
+                            method: "POST",
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest"
+                            }
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok || !data.success) {
+                            showAjaxMessage(data.message || "Could not mark for review.", true);
+                            if (button) {
+                                button.disabled = false;
+                                button.textContent = "Mark Review";
+                            }
+                            return;
+                        }
+
+                        buildEditableRow(row, transactionId, categories);
+                        showAjaxMessage("Transaction marked for review.");
+
+                    } catch (error) {
+                        showAjaxMessage("Something went wrong while updating.", true);
+                        if (button) {
+                            button.disabled = false;
+                            button.textContent = "Mark Review";
+                        }
+                    }
+                });
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            attachAjaxUpdateHandlers();
+            attachAjaxMarkReviewHandlers();
+        });
+    </script>
+</body>
+</html>
